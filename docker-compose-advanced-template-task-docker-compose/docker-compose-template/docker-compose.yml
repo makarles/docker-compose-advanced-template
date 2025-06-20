@@ -1,0 +1,46 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:15-alpine
+    env_file: ./db/.db.env
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  init-db:
+    build: ./backend
+    command: ["python", "init_db.py"]
+    env_file: ./db/.db.env
+    environment:
+      DB_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build: ./backend
+    env_file: ./db/.db.env
+    environment:
+      DB_HOST: db
+    depends_on:
+      - init-db
+    expose:
+      - "8000"
+
+  frontend:
+    image: nginx:1.27-alpine
+    ports:
+      - "8189:80"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro   # ← новая строка
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
